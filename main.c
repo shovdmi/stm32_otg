@@ -1,6 +1,6 @@
 #include "stm32.h"
 
-#if 1
+#if 0
 void _init(void)
 {
 	return;
@@ -73,11 +73,12 @@ void clock_initialization()
 void otg_detach()
 {
     //When no device is plugged in, the host will see both data lines low, as its 15 kohm resistors are pulling each data line low.
-    //RCC->AHB1ENR |= RCC_AHB1ENR_GPIOAEN;
-    //GPIOA->MODER &= ~(GPIO_MODER_MODE11 | GPIO_MODER_MODE12);// 00: Input (reset state)
-    //GPIOA->PUPDR = GPIO_PUPDR_PUPD11_1 | GPIO_PUPDR_PUPD12_1;// 10: Pull-down
+    RCC->AHB1ENR |= RCC_AHB1ENR_GPIOAEN;
+    GPIOA->MODER &= ~(GPIO_MODER_MODE11 | GPIO_MODER_MODE12);// 00: Input (reset state)
+    GPIOA->PUPDR |= GPIO_PUPDR_PUPD11_1 | GPIO_PUPDR_PUPD12_1;// 10: Pull-down
 
 	USB_OTG_FS->GCCFG &= ~USB_OTG_GCCFG_PWRDWN;    // 0: Power down activated
+    //*USB_OTG_IN_PCGCCTL &= ~(USB_OTG_PCGCCTL_STOPCLK | USB_OTG_PCGCCTL_GATECLK); // FIXME
     // The DP pull-up resistor is removed by setting the soft disconnect bit in the device control register(SDIS bit in OTG_FS_DCTL)
     USB_OTG_DEVICE->DCTL |= USB_OTG_DCTL_SDIS; //Table 134. Minimum duration for soft disconnect : 1ms + 2.5us
     for (int i = 0; i < (432 * 10) * 1000; ++i) {
@@ -90,15 +91,15 @@ void otg_detach()
 
 void otg_initialization()
 {
-	/*
-    RCC->AHB1ENR |= RCC_AHB1ENR_GPIOAEN;
-    GPIOA->MODER = GPIO_MODER_MODE11_1  | GPIO_MODER_MODE12_1; // 10: Alternate function mode; 01: General purpose output mode
-    GPIOA->OTYPER  = ~(GPIO_OTYPER_OT11  | GPIO_OTYPER_OT12);   //  0: Output push-pull (reset state)
-    GPIOA->OSPEEDR =  (GPIO_OSPEEDER_OSPEEDR11  | GPIO_OSPEEDER_OSPEEDR12);   //  11: 
-    GPIOA->PUPDR = GPIO_PUPDR_PUPD11_0 | GPIO_PUPDR_PUPD12_0;// 01: Pull-up
-    //GPIOA->PUPDR  = ~(GPIO_PUPDR_PUPD11 | GPIO_PUPDR_PUPD12);  // 00: No pull-up, pull-down
+	
+    RCC->AHB1ENR   |=  RCC_AHB1ENR_GPIOAEN;
+    GPIOA->MODER   |=  GPIO_MODER_MODE11_1  | GPIO_MODER_MODE12_1; // 10: Alternate function mode; 01: General purpose output mode
+    GPIOA->OTYPER  &= ~(GPIO_OTYPER_OT11  | GPIO_OTYPER_OT12);     //  0: Output push-pull (reset state)
+    GPIOA->OSPEEDR |=  (GPIO_OSPEEDER_OSPEEDR11  | GPIO_OSPEEDER_OSPEEDR12);   //  11: 
+    //GPIOA->PUPDR = GPIO_PUPDR_PUPD11_0 | GPIO_PUPDR_PUPD12_0;    // 01: Pull-up
+    GPIOA->PUPDR   &= ~(GPIO_PUPDR_PUPD11 | GPIO_PUPDR_PUPD12);    // 00: No pull-up, pull-down
     // AF10 (OTG_FS)
-    GPIOA->AFR[1] |= (10 << GPIO_AFRH_AFSEL11_Pos) | (10 << GPIO_AFRH_AFSEL12_Pos); 
+    GPIOA->AFR[1]  |= (10 << GPIO_AFRH_AFSEL11_Pos) | (10 << GPIO_AFRH_AFSEL12_Pos); 
 
     //GPIOA->BSRR = GPIO_BSRR_BR4 | GPIO_BSRR_BR5;
 
@@ -106,35 +107,73 @@ void otg_initialization()
     //GPIOA->MODER = GPIO_MODER_MODE4_0 | GPIO_MODER_MODE5_0;// 01: General purpose output mode
     //GPIOA->BSRR = GPIO_BSRR_BR4 | GPIO_BSRR_BR5;
     //GPIOA->PUPDR = GPIO_PUPDR_PUPD4_1 | GPIO_PUPDR_PUPD5_1;// 10: Pull-down
-    */
+    
 	RCC->AHB2ENR |= RCC_AHB2ENR_OTGFSEN;
+    RCC->APB2ENR |= RCC_APB2ENR_SYSCFGEN;
+    __asm__("nop"); //  Delay after an RCC peripheral clock enabling
+
+    // Select FS Embedded PHY
+    USB_OTG_FS->GUSBCFG |= USB_OTG_GUSBCFG_PHYSEL;
 
     // Core soft reset
-    USB_OTG_FS->GRSTCTL |= USB_OTG_GRSTCTL_CSRST;
-    while ((USB_OTG_FS->GRSTCTL & USB_OTG_GRSTCTL_CSRST) != 0) { 
-        __asm__("nop");
-    }
 	// The software must also check that bit 31 in this register is set to 1 (AHB Master is Idle) before starting any operation
     while ((USB_OTG_FS->GRSTCTL & USB_OTG_GRSTCTL_AHBIDL) == 0) { // Indicates that the AHB master state machine is in the Idle condition.
         __asm__("nop");
     }
 
+    USB_OTG_FS->GRSTCTL |= USB_OTG_GRSTCTL_CSRST;
+    while ((USB_OTG_FS->GRSTCTL & USB_OTG_GRSTCTL_CSRST) != 0) { 
+        __asm__("nop");
+    }
+
+	USB_OTG_FS->GCCFG |= USB_OTG_GCCFG_PWRDWN;    // 1: Power down deactivated (“Transceiver active”)
     
 
-	USB_OTG_FS->GUSBCFG  |= USB_OTG_GUSBCFG_FDMOD;  // force OTG_FS core to work as a USB peripheral-only
-	USB_OTG_DEVICE->DCFG |= USB_OTG_DCFG_DSPD_Msk;  // 11: Full speed (USB 1.1 transceiver clock is 48 MHz)
+	USB_OTG_FS->GUSBCFG  &= ~(USB_OTG_GUSBCFG_FDMOD | USB_OTG_GUSBCFG_FHMOD);
+	USB_OTG_FS->GUSBCFG  |=   USB_OTG_GUSBCFG_FDMOD;  // force OTG_FS core to work as a USB peripheral-only
+	// When HNP or SRP is enabled the VBUS sensing pin (PA9) pin should be connected to VBUS. 
+	// When HNP and SRP are both disabled, the VBUS sensing pin (PA9) should not be connected to VBUS.This pin can be can be used as GPIO.
+	USB_OTG_FS->GUSBCFG &= ~USB_OTG_GUSBCFG_HNPCAP;         // HNP capable bit (Host Negtiation Protocol)
+	USB_OTG_FS->GUSBCFG &= ~USB_OTG_GUSBCFG_SRPCAP;         // SRP capable bit 
+	
+    while ((USB_OTG_FS->GINTSTS & USB_OTG_GINTSTS_CMOD) != 0) { // CMOD: Current mode of operation 0 : Device mode, 1 : Host mode
+        __asm__("nop");
+    }
 
-	USB_OTG_FS->GCCFG |= USB_OTG_GCCFG_NOVBUSSENS;
-	USB_OTG_FS->GCCFG |= USB_OTG_GCCFG_PWRDWN;    // 1: Power down deactivated (“Transceiver active”)
-    USB_OTG_DEVICE->DCTL &= ~USB_OTG_DCTL_SDIS;
+    {
+        // Endpoint Init
+    }
+
+	// VBUS Sensing disable
+    USB_OTG_DEVICE->DCTL |=   USB_OTG_DCTL_SDIS;
+	USB_OTG_FS->GCCFG    |=   USB_OTG_GCCFG_NOVBUSSENS;
+    USB_OTG_FS->GCCFG    &= ~(USB_OTG_GCCFG_VBUSASEN | USB_OTG_GCCFG_VBUSBSEN);
+    
+
+	// PHY Clock restart
     *USB_OTG_IN_PCGCCTL = 0;
 
+    USB_OTG_DEVICE->DCFG |=   0 << USB_OTG_DCFG_PFIVL_Pos;
+    USB_OTG_DEVICE->DCFG |=   USB_OTG_DCFG_DSPD_Msk;  // 11: Full speed (USB 1.1 transceiver clock is 48 MHz)
+
+    {
+        // Flush FIFOs
+    }
+    
+
+    //-------------------------------------------------------------------------------------
     
 	uint32_t device_status = USB_OTG_DEVICE->DSTS;
 
 
 	// 22.17 OTG_FS programming model. 22.17.1 Core initialization
 	USB_OTG_FS->GAHBCFG |= USB_OTG_GAHBCFG_GINT;           // Global interrupt mask bit GINTMSK = 1
+    
+    *USB_OTG_IN_PCGCCTL  &= ~(USB_OTG_PCGCCTL_STOPCLK | USB_OTG_PCGCCTL_GATECLK); //FIXME
+    USB_OTG_DEVICE->DCTL &= ~USB_OTG_DCTL_SDIS;
+
+#if 0
+
 	USB_OTG_FS->GINTSTS  = USB_OTG_GINTSTS_RXFLVL;         // RxFIFO non-empty (RXFLVL bit in OTG_FS_GINTSTS)
 	USB_OTG_FS->GAHBCFG |= USB_OTG_GAHBCFG_TXFELVL;        // Periodic TxFIFO empty level
 
@@ -146,6 +185,7 @@ void otg_initialization()
 	USB_OTG_FS->GUSBCFG |= 1 << USB_OTG_GUSBCFG_TRDT_Pos;  // FS timeout calibration
 	USB_OTG_FS->GUSBCFG |= 1 << USB_OTG_GUSBCFG_TOCAL_Pos; // USB turnaround time
 
+#endif
 	// OTG interrupt mask, Mode mismatch interrupt mask
 	USB_OTG_FS->GINTMSK |= USB_OTG_GINTMSK_OTGINT | USB_OTG_GINTMSK_MMISM;
 	volatile uint8_t current_mode = USB_OTG_FS->GINTSTS & USB_OTG_GINTSTS_CMOD;   // CMOD: Current mode of operation 0 : Device mode, 1 : Host mode 
