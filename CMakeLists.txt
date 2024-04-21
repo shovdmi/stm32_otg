@@ -30,8 +30,8 @@ SET(APP_PATH              app)
 SET(PLATFORM_PATH         stm32h)
 SET(DEVICE_SRC_PATH       stm32h/${MCU_CHIP}/Source)
 SET(DEVICE_INC_PATH       stm32h/${MCU_CHIP}/Include)
-SET(CMSIS_CORE_INC_PATH   CMSIS_5/CMSIS/Core/Include)
-
+SET(CMSIS_CORE_PATH       CMSIS_h/CMSIS_5_excerpt)
+SET(CMSIS_CORE_INC_PATH   ${CMSIS_CORE_PATH}/CMSIS/Core/Include)
 
 #-- Include dirs ---------------------------------------------------------------
 INCLUDE_DIRECTORIES(${APP_PATH})

@@ -1,9 +1,9 @@
 [submodule "stm32h"]
 	path = stm32h
 	url = https://github.com/dmitrystu/stm32h.git
-[submodule "CMSIS_5"]
-	path = CMSIS_5
-	url = https://github.com/ARM-software/CMSIS_5.git
 [submodule "printf"]
 	path = printf
 	url = https://github.com/mpaland/printf.git
+[submodule "CMSIS_h"]
+	path = CMSIS_h
+	url = https://github.com/shovdmi/CMSIS_h.git
