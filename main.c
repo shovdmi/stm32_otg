@@ -65,6 +65,13 @@ void clock_initialization()
 }
 
 
+static void delay_ms(int timeout_ms)
+{
+    for (int i = 0; i < (432 * 10) * 1000; ++i) {
+        __asm__("nop");
+    }
+}
+
 #define USB_OTG_DEVICE          ((USB_OTG_DeviceTypeDef *)      (USB_OTG_FS_PERIPH_BASE + USB_OTG_DEVICE_BASE))
 #define USB_OTG_OUT_ENDPOINT0   ((USB_OTG_OUTEndpointTypeDef *) (USB_OTG_FS_PERIPH_BASE + USB_OTG_OUT_ENDPOINT_BASE))
 #define USB_OTG_IN_ENDPOINT0    ((USB_OTG_INEndpointTypeDef *)  (USB_OTG_FS_PERIPH_BASE + USB_OTG_IN_ENDPOINT_BASE))
@@ -72,18 +79,17 @@ void clock_initialization()
 
 void otg_detach()
 {
-    //When no device is plugged in, the host will see both data lines low, as its 15 kohm resistors are pulling each data line low.
-    RCC->AHB1ENR |= RCC_AHB1ENR_GPIOAEN;
-    GPIOA->MODER &= ~(GPIO_MODER_MODE11 | GPIO_MODER_MODE12);// 00: Input (reset state)
-    GPIOA->PUPDR |= GPIO_PUPDR_PUPD11_1 | GPIO_PUPDR_PUPD12_1;// 10: Pull-down
-
 	USB_OTG_FS->GCCFG &= ~USB_OTG_GCCFG_PWRDWN;    // 0: Power down activated
     //*USB_OTG_IN_PCGCCTL &= ~(USB_OTG_PCGCCTL_STOPCLK | USB_OTG_PCGCCTL_GATECLK); // FIXME
     // The DP pull-up resistor is removed by setting the soft disconnect bit in the device control register(SDIS bit in OTG_FS_DCTL)
     USB_OTG_DEVICE->DCTL |= USB_OTG_DCTL_SDIS; //Table 134. Minimum duration for soft disconnect : 1ms + 2.5us
-    for (int i = 0; i < (432 * 10) * 1000; ++i) {
-        __asm__("nop");
-    }
+    delay_ms(10);
+
+    //When no device is plugged in, the host will see both data lines low, as its 15 kohm resistors are pulling each data line low.
+    RCC->AHB1ENR |= RCC_AHB1ENR_GPIOAEN;
+    GPIOA->MODER &= ~(GPIO_MODER_MODE11 | GPIO_MODER_MODE12); // 00: Input (reset state)
+    GPIOA->PUPDR |= GPIO_PUPDR_PUPD11_1 | GPIO_PUPDR_PUPD12_1;// 10: Pull-down
+
 
     //*USB_OTG_IN_PCGCCTL |= USB_OTG_PCGCR_STPPCLK;
 	//RCC->AHB2ENR &= ~RCC_AHB2ENR_OTGFSEN;
@@ -145,7 +151,8 @@ void otg_initialization()
     }
 
 	// VBUS Sensing disable
-    USB_OTG_DEVICE->DCTL |=   USB_OTG_DCTL_SDIS;
+    USB_OTG_DEVICE->DCTL |= USB_OTG_DCTL_SDIS; //Table 134. Minimum duration for soft disconnect : 1ms + 2.5us
+    delay_ms(10);
 	USB_OTG_FS->GCCFG    |=   USB_OTG_GCCFG_NOVBUSSENS;
     USB_OTG_FS->GCCFG    &= ~(USB_OTG_GCCFG_VBUSASEN | USB_OTG_GCCFG_VBUSBSEN);
     
