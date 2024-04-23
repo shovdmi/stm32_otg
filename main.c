@@ -11,57 +11,49 @@ void SystemInit()
 }
 #endif
 
+
 void clock_initialization()
 {
-	RCC->CR |= RCC_CR_HSEBYP | RCC_CR_HSEON;   // 1: HSE oscillator bypassed with an external clock
-	while ((RCC->CR & RCC_CR_HSERDY) == 0) {
-	}
+    // APB1 /2 prescaler!! Mustn't exceed 42MHz
+    RCC->CFGR |= RCC_CFGR_PPRE1_2; // 100: AHB clock divided by 2
 
-	uint32_t pllcfgr = RCC->PLLCFGR;
-	pllcfgr = pllcfgr | RCC_PLLCFGR_PLLSRC; // 1: HSE oscillator clock selected as PLL and PLLI2S clock entry
-	// The software has to set these bits correctly to ensure that the VCO input frequency
-	// ranges from 1 to 2 MHz. It is recommended to select a frequency of 2 MHz to limit
-	// PLL jitter. (2 ≤ PLLM ≤ 63 )
-	// Set VCO = 8 Mhz / M = 8 Mhz / 4 = 2 Mhz
-	pllcfgr = (pllcfgr & ~RCC_PLLCFGR_PLLM_Msk) | (4 << RCC_PLLCFGR_PLLM_Pos); // PLL "/M" Division factor
+    RCC->CR |= RCC_CR_HSEBYP | RCC_CR_HSEON; // 1: HSE oscillator bypassed with an external clock
+    while ((RCC->CR & RCC_CR_HSERDY) == 0) {
+        __asm__("nop");
+    }
 
-	// The software has to set these bits correctly to ensure that the VCO output frequency is between 192 and 432 MHz
-	// Set VCO Output frequency = 2 MHz * N = 2 Mhz * 216 = 432 Mhz  ( 192 ≤ PLLN ≤ 432 )
-	pllcfgr = (pllcfgr & ~RCC_PLLCFGR_PLLN_Msk) | (120 << RCC_PLLCFGR_PLLN_Pos); // PLL "xN" multiplication factor for VCO
+    // Quartz frequency is 16 MHz
+    // (16MHz / PLLM) * PLLN / PLLP = (16MHz / 8) * 216 / 8 = 432MHz
+    // "/M" Division factor : (2 <= PLLM <= 63).
+    // "*N" multiplication factor for VCO ( 192 <= PLLN <= 432 ). VCO output frequency is between 192 and 432 MHz
+    // "/P" division factor for main system clock. Value is 2, 4, 6 or 8. Frequency must not to exceed 120 MHz on this domain
+    // "/Q" division factor for USB OTG FS, SDIO ( 2 <= PLLQ <= 15 )
 
-	// The software has to set these bits correctly not to exceed 84 MHz on this domain.
-	// PLL output clock frequency = VCO frequency / PLLP with PLLP = 2, 4, 6, or 8 (00: PLLP=2, 01: PLLP=4, 10: PLLP=6, 11: PLLP=8)
-	// Set System Clock = 432 Mhz / P = 432 MHz / 8 = 48 MHz
-	// FIXME:
-    pllcfgr = (pllcfgr & ~RCC_PLLCFGR_PLLP_Msk) | (RCC_PLLCFGR_PLLP_Msk); // PLL "/P" division factor for main system clock
+#define QUARTZ_FREQ 8
+#define PLLM  4
+#define PLLQ  5
+//#define PLLN ((48 * PLLQ) / (QUARTZ_FREQ / PLLM))
+#define PLLN  120
+#define PLLP  6
+#define PLLPval (((PLLP) >> 1) - 1) // PLLP = 2, 4, 6, or 8. 00: PLLP=2, 01: PLLP=4, 10: PLLP=6, 11: PLLP=8
 
-	// Set PLL48CK = 432 MHz / Q = 432 / 9 = 48Mhz ( 2 ≤ PLLQ ≤ 15 )
-	pllcfgr = (pllcfgr & ~RCC_PLLCFGR_PLLQ_Msk) | (5 << RCC_PLLCFGR_PLLQ_Pos); // PLL "/Q" division factor for USB OTG FS, SDIO
+    uint32_t pllcfgr = RCC->PLLCFGR;
+    pllcfgr = (pllcfgr & ~RCC_PLLCFGR_PLLSRC) | RCC_PLLCFGR_PLLSRC_HSE; // 1: HSE oscillator clock selected as PLL and PLLI2S clock entry
+    pllcfgr = (pllcfgr & ~RCC_PLLCFGR_PLLM) | (PLLM << 0);     // Bits 5:0   PLLM 
+    pllcfgr = (pllcfgr & ~RCC_PLLCFGR_PLLN) | (PLLN << 6);     // Bits 14:6  PLLN 
+    pllcfgr = (pllcfgr & ~RCC_PLLCFGR_PLLP) | (PLLPval << 16); // Bits 17:16 PLLP 
+    pllcfgr = (pllcfgr & ~RCC_PLLCFGR_PLLQ) | (PLLQ << 24);    // Bits 27:24 PLLQ 
+    RCC->PLLCFGR = pllcfgr;
 
-	RCC->PLLCFGR = pllcfgr;
+    RCC->CR |= RCC_CR_PLLON;
+    while ((RCC->CR & RCC_CR_PLLRDY) == 0) {
+        __asm__("nop");
+    }
 
-	RCC->CR |= RCC_CR_PLLON;
-	while ((RCC->CR & RCC_CR_PLLRDY) == 0) {
-	}
-
-    //TODO: APB1 /2 prescaler!! Mustn't exceed 42MHz
-
-
-	RCC->CFGR = (RCC->CFGR & ~RCC_CFGR_SW_Msk) | RCC_CFGR_SW_1; // 10: PLL selected as system clock
-	while ((RCC->CFGR & RCC_CFGR_SWS_Msk) != RCC_CFGR_SWS_1) {
-	}
-
-	// 84MHz * P : 84 * 1 = 84; 84 * 2 = 168; 84 * 3 = 252; 84 * 4 = 332 MHz
-	// PLL48CK * Q   |  /N			   |  
-	// 48 * 2 =  96  |  96 / 48  = 2 MHz | 
-	// 48 * 3 = 132  | 132 / 66		  |
-	// 48 * 4 = 192  | 192 / 96		  |
-	// 48 * 5 = 240  | 240 / 120		 |
-	// 48 * 6 = 288  | 288 / 144		 |
-	// 48 * 7 = 336  | 336 / 168		 |
-	// 48 * 8 = 384  | 384 / 192		 |
-	// 48 * 9 = 432  | 432 / 216		 | 432 / 8 = 42 MHz
-
+    RCC->CFGR = (RCC->CFGR & ~RCC_CFGR_SW_Msk) | RCC_CFGR_SW_1; // 10: PLL selected as system clock
+    while ((RCC->CFGR & RCC_CFGR_SWS_Msk) != RCC_CFGR_SWS_1) {
+        __asm__("nop");
+    }
 }
 
 
@@ -122,13 +114,17 @@ void otg_initialization()
     USB_OTG_FS->GUSBCFG |= USB_OTG_GUSBCFG_PHYSEL;
 
     // Core soft reset
-	// The software must also check that bit 31 in this register is set to 1 (AHB Master is Idle) before starting any operation
     while ((USB_OTG_FS->GRSTCTL & USB_OTG_GRSTCTL_AHBIDL) == 0) { // Indicates that the AHB master state machine is in the Idle condition.
         __asm__("nop");
     }
 
     USB_OTG_FS->GRSTCTL |= USB_OTG_GRSTCTL_CSRST;
     while ((USB_OTG_FS->GRSTCTL & USB_OTG_GRSTCTL_CSRST) != 0) { 
+        __asm__("nop");
+    }
+
+	// The software must also check that bit 31 in this register is set to 1 (AHB Master is Idle) before starting any operation
+    while ((USB_OTG_FS->GRSTCTL & USB_OTG_GRSTCTL_AHBIDL) == 0) { // Indicates that the AHB master state machine is in the Idle condition.
         __asm__("nop");
     }
 
