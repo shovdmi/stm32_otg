@@ -111,7 +111,8 @@ void otg_initialization()
     __asm__("nop"); //  Delay after an RCC peripheral clock enabling
 
     // Select FS Embedded PHY
-    USB_OTG_FS->GUSBCFG |= USB_OTG_GUSBCFG_PHYSEL;
+    // This bit is always 1 with read-only access. 
+    // USB_OTG_FS->GUSBCFG |= USB_OTG_GUSBCFG_PHYSEL;
 
     // Core soft reset
     while ((USB_OTG_FS->GRSTCTL & USB_OTG_GRSTCTL_AHBIDL) == 0) { // Indicates that the AHB master state machine is in the Idle condition.
@@ -206,12 +207,12 @@ void otg_initialization()
 	// Wait for the USBRST interrupt. A reset has been detected on the USB that lasts for about 10 ms
 	while ((USB_OTG_FS->GINTSTS & USB_OTG_GINTSTS_USBRST) == 0) {
 	}
-    USB_OTG_FS->GINTSTS = USB_OTG_GINTSTS_USBRST;
+    USB_OTG_FS->GINTSTS = (USB_OTG_FS->GINTSTS & USB_OTG_GINTSTS_USBRST);
 
 	// Wait for the end of reset on the USB
 	while ((USB_OTG_FS->GINTSTS & USB_OTG_GINTSTS_ENUMDNE) == 0) {
 	}
-    USB_OTG_FS->GINTSTS = USB_OTG_GINTSTS_ENUMDNE;
+    USB_OTG_FS->GINTSTS = (USB_OTG_FS->GINTSTS & USB_OTG_GINTSTS_ENUMDNE);
 
 	//Read the OTG_FS_DSTS to determine the enumeration speed
 	current_mode = USB_OTG_FS->GINTSTS & USB_OTG_GINTSTS_CMOD; // CMOD: Current mode of operation 0 : Device mode, 1 : Host mode 
@@ -262,6 +263,24 @@ void otg_initialization()
 
 	while (1) {
 		current_mode = USB_OTG_FS->GINTSTS & USB_OTG_GINTSTS_CMOD; // CMOD: Current mode of operation 0 : Device mode, 1 : Host mode 
+
+//    	USB_OTG_OUT_ENDPOINT0->DOEPTSIZ &= ~(USB_OTG_DOEPTSIZ_XFRSIZ);
+//    	USB_OTG_OUT_ENDPOINT0->DOEPTSIZ &= ~(USB_OTG_DOEPTSIZ_PKTCNT);
+
+    	
+#define USBx_DFIFO(i)   *(__IO uint32_t *)(USB_OTG_FS_PERIPH_BASE + USB_OTG_FIFO_BASE + ((i) * USB_OTG_FIFO_SIZE))
+    	volatile uint8_t __attribute__((aligned(32))) buf[64] ;
+    	uint8_t *pDest = &buf[0];
+    	uint32_t len = 8 + 4; // fifo header + packet
+    	uint32_t count32b = (uint32_t)len >> 2U;
+    	for (int i = 0U; i < len * sizeof(uint32_t); i += sizeof(uint32_t))
+    	{
+        	__UNALIGNED_UINT32_WRITE(&buf[i], USBx_DFIFO(0U));
+    	}
+    	//ep->xfer_count += (RegVal & USB_OTG_GRXSTSP_BCNT) >> 4;
+    	USB_UNMASK_INTERRUPT(hpcd->Instance, USB_OTG_GINTSTS_RXFLVL);
+    	
+    	(void)len++;
 	}
 }
 
