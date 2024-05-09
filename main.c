@@ -186,8 +186,8 @@ void otg_initialization()
 	// USB_OTG_FS->GUSBCFG |= USB_OTG_GUSBCFG_HNPCAP;         // HNP capable bit (Host Negtiation Protocol)
 	// USB_OTG_FS->GUSBCFG |= USB_OTG_GUSBCFG_SRPCAP;         // SRP capable bit 
 
-	USB_OTG_FS->GUSBCFG |= 1 << USB_OTG_GUSBCFG_TRDT_Pos;  // FS timeout calibration
-	USB_OTG_FS->GUSBCFG |= 1 << USB_OTG_GUSBCFG_TOCAL_Pos; // USB turnaround time
+    USB_OTG_FS->GUSBCFG |= 1 << USB_OTG_GUSBCFG_TRDT_Pos;  // USB turnaround time : https://www.usb.org/sites/default/files/Propagation_Delay_between_Host_Transcievers_and_Downstream_Ports.pdf
+    USB_OTG_FS->GUSBCFG |= 1 << USB_OTG_GUSBCFG_TOCAL_Pos; // FS timeout calibration
 
 #endif
 	// OTG interrupt mask, Mode mismatch interrupt mask
